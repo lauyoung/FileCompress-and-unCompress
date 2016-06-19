@@ -109,9 +109,9 @@ public:
 
 		char str[128];
 
-		itoa(chSize >> 32, str, 10);
+		/*itoa(chSize >> 32, str, 10);
 		fputs(str, FileCon);
-		fputc('\n', FileCon);
+		fputc('\n', FileCon);*/
 
 		itoa(chSize, str, 10);
 		fputs(str, FileCon);
@@ -127,8 +127,8 @@ public:
 				Inconfig += itoa(_info[i]._count, str, 10);
 				Inconfig += '\n';
 			}
-			//Inconfig.clear();
 			fputs(Inconfig.c_str(), FileCon);
+			Inconfig.clear();
 		}
 
 		fclose(fout);
@@ -138,9 +138,84 @@ public:
 	}
 	void UnComPress(const char* filename)
 	{
-		//读取配置文件，得到字符出现的次数
-		//根据根节点的权值得到字符出现的总次数，已达到与解压文件，字符数相同。
-		//重建哈弗曼树
+		//第一种读取----读取配置文件，得到字符出现的次数
+		//第二中读取----根据根节点的权值得到字符出现的总次数，已达到与解压文件，字符数相同。
+		
+		string configFile = filename;
+		configFile += ".con";
+		FILE* foutconfig = fopen(configFile.c_str(), "r");
+		assert(foutconfig);
+
+		string line;
+		long long chSize = 0;
+		/*ReadLine(foutconfig,line);
+		chSize = atoi(line.c_str());
+		chSize << 32;
+		line.clear();*/
+
+		ReadLine(foutconfig, line);
+		chSize += atoi(line.c_str());
+		line.clear();
+
+		while (ReadLine(foutconfig, line))
+		{
+			if (!line.empty())
+			{
+				unsigned char ch = line[0];
+				_info[ch]._count=atoi(line.substr(2).c_str());
+				line.clear();
+			}
+			else
+			{
+				line += '\n';
+			}
+		}
+		//重建哈夫曼树
+		CharInfo invalid;
+		HuffManTree<CharInfo> Tree(_info, 256, invalid);
+
+		//读取压缩文件
+		string compressfilename = filename;
+		compressfilename += ".HuffMan";
+		FILE* FileCom = fopen(compressfilename.c_str(), "rb");
+		assert(FileCom);
+
+		string uncompressfilename = filename;
+		uncompressfilename += ".uncomp";
+		FILE* FileUnCom = fopen(uncompressfilename.c_str(), "wb");
+		assert(FileUnCom);
+
+		char ch = fgetc(FileCom);
+		HuffManTreeNode<CharInfo>* root = Tree.GetRoot();
+		HuffManTreeNode<CharInfo>* cur = root;
+
+		int pos = 8;
+		while (1)
+		{
+			if (cur->_left==NULL && cur->_right==NULL)
+			{
+				fputc(cur->_weight._ch, FileUnCom);
+				cur = root;
+				if (--chSize==0)
+				{
+					break;
+				}
+			}
+			--pos;
+			if (ch & (1<<pos))
+				cur = cur->_right;
+			else
+				cur = cur->_left;
+			if (pos==0)
+			{
+				ch = fgetc(FileCom);
+				pos = 8;
+			}
+		}
+
+		fclose(FileCom);
+		fclose(FileUnCom);
+		fclose(foutconfig);
 	}
 protected:
 	void GenerateTree(HuffManTreeNode<CharInfo>* root,string& code)
@@ -149,13 +224,36 @@ protected:
 			return;
 
 		if (root->_left==NULL &&root->_right==NULL)
-		{
+		{ 
 			_info[root->_weight._ch]._code = code;
 			return;
 		}
 		GenerateTree(root->_left, code+'0');
 		GenerateTree(root->_right, code+'1');
 	}
+	bool ReadLine(FILE *fOut, string &line)
+	{
+		char ch = fgetc(fOut);
+		if (ch == EOF)
+			return false;
+		while (ch!=EOF && ch !='\n')
+		{
+			line += ch;
+			ch = fgetc(fOut);
+		}
+		return true;
+	}
 protected:
 	CharInfo _info[256];
 };
+
+void TestCompress()
+{
+	FileCompress Fc;
+	Fc.ComPress("InPut");
+}
+void TestUnCompress()
+{
+	FileCompress Fc;
+	Fc.UnComPress("InPut");
+}
